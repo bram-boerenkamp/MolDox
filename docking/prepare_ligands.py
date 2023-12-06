@@ -2,6 +2,7 @@
 from meeko import MoleculePreparation
 from meeko import obutils
 from openbabel import pybel, openbabel
+from rdkit import Chem
 import os
 import time
 
@@ -22,14 +23,23 @@ import time
 #     out.close()
 
 
-def prep_mol_from_file(infile, output_pdbqt, hydrate=False, keep_nonpolar_hydrogens=False):
-    mol = obutils.load_molecule_from_file(infile)
+def prep_mol_from_file(infile, output_pdbqt, hydrate=False, removeHs=False,
+    keep_chorded_rings=False, keep_equivalent_rings=False, merge_these_atom_types=("H",),
+    rigid_macrocycles=False):
+    
+    mol_supp = Chem.SDMolSupplier(infile, removeHs=removeHs)
+    
+    for mol in mol_supp:
+        preparator = MoleculePreparation(hydrate=hydrate,
+                                         keep_chorded_rings=keep_chorded_rings, 
+                                         keep_equivalent_rings=keep_equivalent_rings,
+                                         merge_these_atom_types=merge_these_atom_types,
+                                         rigid_macrocycles=rigid_macrocycles)
+        preparator.prepare(mol)
 
-    preparator = MoleculePreparation(hydrate=hydrate,
-                                     keep_nonpolar_hydrogens=keep_nonpolar_hydrogens)
-    preparator.prepare(mol)
+        preparator.write_pdbqt_file(output_pdbqt)
 
-    preparator.write_pdbqt_file(output_pdbqt)
+    return mol_supp
 
 
 def hydrogenate_mol_from_file(infile, outfile, overwrite=True):
@@ -49,13 +59,14 @@ def hydrogenate_mol_from_file(infile, outfile, overwrite=True):
     out.close()
 
 
-def prep_ligands(infile, format='sdf', output_dir='.', hydrogenate=True, hydrate=False, keep_nonpolar_hydrogens=False,
+def prep_ligands(infile, format='sdf', output_dir='.', hydrogenate=True, hydrate=False, 
                  pH_value=None, make3d=True, remake3d=False, forcefield='mmff94', steps_3d=50, steps_3d_localopt=500):
 
     # Read file
     mols = [m for m in pybel.readfile(filename=infile, format=format)]
 
     # Add hydrogens
+
     if hydrogenate:
         for m in mols:
             m.addh()
@@ -82,8 +93,7 @@ def prep_ligands(infile, format='sdf', output_dir='.', hydrogenate=True, hydrate
 
     # Prep for docking and write to file
     for idx, m in enumerate(mols):
-        preparator = MoleculePreparation(hydrate=hydrate,
-                                         keep_nonpolar_hydrogens=keep_nonpolar_hydrogens)
+        preparator = MoleculePreparation(hydrate=hydrate)
         preparator.prepare(m.OBMol)
 
         # preparator.write_pdbqt_file(f"{output_dir}/mol_{idx}.pdbqt")
